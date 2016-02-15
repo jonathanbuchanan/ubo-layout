@@ -52,7 +52,7 @@ int main(int argc, char **argv) {
 	return 0;
 }
 
-char *types[] = {
+char *types[32] = {
 	"bool", "int", "uint", "float", "double", // Scalars
 	"bvec2", "bvec3", "bvec4", // Boolean Vectors
 	"ivec2", "ivec3", "ivec4", // Int Vectors
@@ -65,10 +65,31 @@ char *types[] = {
 	"mat4x2", "mat4x3", "mat4x4", // 4xN Matrices
 };
 
+struct UniformBlockElement {
+	char *type;
+	char *name;
+	bool isArray;
+	int arrayLength;
+	int baseAlignment;
+	int alignedOffset;
+};
+
+bool isValueInArray(char *value, char *array[], int size) {
+	for (int i = 0; i < size; i++) {
+		if (strcmp(value, array[i]) == 0)
+			return true;
+	}
+	return false;
+}
+
+bool isValueAType(char *value) {
+	return isValueInArray(value, types, 32);
+}
+
 int parseInputFile(char *file) {
 	printf("Parsing file: %s\n", file); 
 	FILE *input;
-	const char *delimiters = " ()\n\t"; // Delimiters for parsing file
+	const char *delimiters = " ();[]\n\t"; // Delimiters for parsing file
 	char temp[512]; // Temporary String
 	int line = 1; // Line Number
 	int blockLine; // Line of Block
@@ -77,33 +98,43 @@ int parseInputFile(char *file) {
 	if ((input = fopen(file, "r")) == NULL) { // Open the File
 		printf("Failed to open file\n");
 		return -1; // Fail
-	}
-	printf("Starting to Parse First Loop\n");
+	} 
 	while (fgets(temp, 512, input) != NULL) { // Loop Through Lines
 		// Check for 'layout' keyword
-		char *tokenized[10]; // Array of Tokens
+		char *tokenized[10] = {NULL}; // Array of Tokens
 		char *tempString = strtok(temp, delimiters); // Generate Token
 		for (int i = 0; tempString != NULL; i++) { // Loop Through Tokens
 			tokenized[i] = tempString; // Set Token in Tokenized Array
 			tempString = strtok(NULL, delimiters); // Retrieve Next Token
-		} 
-		if (strcmp(tokenized[0], "layout") == 0 && strcmp(tokenized[1], "std140") == 0 && strcmp(tokenized[2], "uniform") == 0) { // Find UBO
-			inBlock = true;
-			blockLine = line; // Set the line of the block 
 		}
-		if (strcmp(tokenized[0], "};") == 0) {
-			inBlock = false;
-			endLine = line;
-			line++;
-			break;
+		if (tokenized[0] != NULL && tokenized[1] != NULL && tokenized[2] != NULL)
+			if (strcmp(tokenized[0], "layout") == 0 && strcmp(tokenized[1], "std140") == 0 && strcmp(tokenized[2], "uniform") == 0) { // Find UBO
+				inBlock = true;
+				blockLine = line; // Set the line of the block 
+			}
+		if (inBlock && tokenized[0] != NULL) {
+			if (isValueAType(tokenized[0])) { // Check if the token declares a type 
+				struct UniformBlockElement element = {tokenized[0], tokenized[1], 0, 0, 0, 0}; // Store Element in a Struct
+				if (tokenized[2] != NULL) { 
+					element.isArray = true;
+					element.arrayLength = atoi(tokenized[2]);
+				}
+				if (element.isArray == false)
+					printf("Type: %s, Name: %s\n", element.type, element.name);
+				else
+					printf("Type: %s, Name: %s, Length: %d\n", element.type, element.name, element.arrayLength);
+			}
 		}
+		if (tokenized[0] != NULL)
+			if (strcmp(tokenized[0], "};") == 0) {
+				inBlock = false;
+				endLine = line;
+				line++;
+				break;
+			}
 		line++; // Increment Line
-	}
-	printf("Parsed First Loop\n");
+	} 
 	if (input)
 		fclose(input); // Close the file 
-	printf("Block Starts on line %d\n", blockLine);
-	fflush(stdout);
-	printf("Block Ends on Line %d\n", endLine); 
 	return 0;
 } 
