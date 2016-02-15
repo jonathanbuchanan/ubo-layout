@@ -1,2 +1,2 @@
 all:
-	gcc main.c -o ubo-layout
+	gcc -g main.c -o ubo-layout
