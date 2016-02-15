@@ -57,17 +57,26 @@ int parseInputFile(char *file) {
 	const char *delimiters = " ()\n\t";
 	char temp[512]; // Temporary String
 	int line = 0; // Line Number
+	int blockLine; // Line of Block
 	if ((input = fopen(file, "r")) == NULL) // Open the File
-		return -1;
+		return -1; // Fail
 	while (fgets(temp, 512, input) != NULL) {
 		// Check for 'layout' keyword
-		char **tokenized;
-		char *tempString = strtok(temp, delimiters);
-		for (int i = 0; tempString != NULL; i++ ) {
-			tokenized[i] = tempString;
-			printf("%s\n", tokenized[i]);
-			tempString = strtok(NULL, delimiters);
-		}
-		
+		char **tokenized; // Array of Tokens
+		char *tempString = strtok(temp, delimiters); // Generate Token
+		for (int i = 0; tempString != NULL; i++ ) { // Loop Through Tokens
+			tokenized[i] = tempString; // Set Token in Tokenized Array
+			tempString = strtok(NULL, delimiters); // Retrieve Next Token
+		} 
+		if (strcmp(tokenized[0], "layout") == 0 && strcmp(tokenized[1], "std140") == 0 && strcmp(tokenized[2], "uniform") == 0) { // Find UBO
+			blockLine = line; // Set the line of the block
+			break; // Break from the loop
+		} 
+		line++; // Increment Line
 	}
-}
+	printf("Block on line %d\n", blockLine);
+	if (input)
+		fclose(input);
+	
+	return 0;
+} 
