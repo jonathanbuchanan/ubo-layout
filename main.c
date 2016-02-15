@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <argp.h>
+
+int parseInputFile(char *file);
 
 int argCount = 1; // Argument Count
 char *inputFile; // The Input File
@@ -44,6 +47,27 @@ struct argp argp = {options, parseOption, "INPUT"}; // Argp
 
 int main(int argc, char **argv) {
 	argp_parse(&argp, argc, argv, 0, 0, &argCount); // Parse Arguments and Options
-	printf("%s\n", inputFile);
+	parseInputFile(inputFile);
 	return 0;
+}
+
+int parseInputFile(char *file) {
+	printf("Parsing file: %s\n", file);
+	FILE *input;
+	const char *delimiters = " ()\n\t";
+	char temp[512]; // Temporary String
+	int line = 0; // Line Number
+	if ((input = fopen(file, "r")) == NULL) // Open the File
+		return -1;
+	while (fgets(temp, 512, input) != NULL) {
+		// Check for 'layout' keyword
+		char **tokenized;
+		char *tempString = strtok(temp, delimiters);
+		for (int i = 0; tempString != NULL; i++ ) {
+			tokenized[i] = tempString;
+			printf("%s\n", tokenized[i]);
+			tempString = strtok(NULL, delimiters);
+		}
+		
+	}
 }
