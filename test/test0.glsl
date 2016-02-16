@@ -14,6 +14,16 @@ layout (std140) uniform TestBlock {
 	mat2x3 g;
 };
 
+layout (std140) uniform TestBlock1 {
+	mat2x3 g;
+	int f;
+	bool e;
+	float d[3];
+	mat4 c;
+	vec3 b;
+	float a;
+};
+
 ...
 ...
 Other Shader Stuff
