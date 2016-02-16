@@ -14,6 +14,7 @@ struct UniformBlockElement {
 
 int parseInputFile(char *file);
 int setBaseAlignment(struct UniformBlockElement *element);
+int setAlignedOffset(struct UniformBlockElement *element, int baseOffset);
 bool isValueInArray(char *value, char *array[], int size);
 
 int argCount = 1; // Argument Count
@@ -99,6 +100,19 @@ int setBaseAlignment(struct UniformBlockElement *element) {
 	return 0;
 } 
 
+int setAlignedOffset(struct UniformBlockElement *element, int baseOffset) {
+	if (baseOffset == 0) {
+		element->alignedOffset = 0;
+		return 0;
+	}
+	int remainder = baseOffset % element->baseAlignment;
+	if (remainder == 0) {
+		element->alignedOffset = baseOffset;
+		return 0;
+	}
+	element->alignedOffset = baseOffset + element->baseAlignment - remainder;
+}
+
 bool isValueInArray(char *value, char *array[], int size) {
 	for (int i = 0; i < size; i++) {
 		if (strcmp(value, array[i]) == 0)
@@ -125,7 +139,7 @@ int parseInputFile(char *file) {
 		return -1; // Fail
 	} 
 	struct UniformBlockElement elements[50]; // Element Array (Add Dynamic Allocation Later!)
-	int elementIndex = 0;
+	int elementIndex = 0; 
 	while (fgets(temp, 512, input) != NULL) { // Loop Through Lines
 		// Check for 'layout' keyword
 		char *tokenized[10] = {NULL}; // Array of Tokens
@@ -197,10 +211,13 @@ int parseInputFile(char *file) {
 			}
 		line++; // Increment Line
 	}
+	int baseOffset = 0;
 	for (int i = 0; i < elementIndex; i++) {
 		setBaseAlignment(&elements[i]);
-		struct UniformBlockElement element = elements[i];
-		printf("Type: %s, Name: %s, BA: %d\n", element.type, element.name, element.baseAlignment);
+		setAlignedOffset(&elements[i], baseOffset);
+		struct UniformBlockElement *element = &elements[i]; 
+		printf("Type: %s, Name: %s, BA: %d, BO: %d, AO: %d\n", element->type, element->name, element->baseAlignment, baseOffset, element->alignedOffset);
+		baseOffset = element->alignedOffset + element->baseAlignment;
 	}
 	if (input)
 		fclose(input); // Close the file 
