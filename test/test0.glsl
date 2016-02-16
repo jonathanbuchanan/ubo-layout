@@ -11,6 +11,7 @@ layout (std140) uniform TestBlock {
 	float d[3];
 	bool e;
 	int f;
+	mat2x3 g;
 };
 
 ...

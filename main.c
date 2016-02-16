@@ -4,7 +4,17 @@
 #include <stdbool.h>
 #include <argp.h>
 
+struct UniformBlockElement {
+	char *type;
+	char *name;
+	bool isArrayElement; 
+	int baseAlignment;
+	int alignedOffset;
+};
+
 int parseInputFile(char *file);
+int setBaseAlignment(struct UniformBlockElement *element);
+bool isValueInArray(char *value, char *array[], int size);
 
 int argCount = 1; // Argument Count
 char *inputFile; // The Input File
@@ -64,15 +74,30 @@ char *types[32] = {
 	"mat3x2", "mat3x3", "mat3x4", // 3xN Matrices
 	"mat4x2", "mat4x3", "mat4x4", // 4xN Matrices
 };
+char *scalars[5] = { "bool", "int", "uint", "float", "double" }; 
+char *vec2[5] = { "bvec2", "ivec2", "uvec2", "vec2", "dvec2" };
+char *vec34[10] = {
+	"bvec3", "bvec4",
+	"ivec3", "ivec4",
+	"uvec3", "uvec4",
+	"vec3",  "vec4",
+	"dvec3", "dvec4"
+}; 
 
-struct UniformBlockElement {
-	char *type;
-	char *name;
-	bool isArray;
-	int arrayLength;
-	int baseAlignment;
-	int alignedOffset;
-};
+int setBaseAlignment(struct UniformBlockElement *element) {
+	if (element->isArrayElement == false) {
+		if (isValueInArray(element->type, scalars, 5)) {
+			element->baseAlignment = 4;  // All scalars have a base alignment of 4 bytes
+		} else if (isValueInArray(element->type, vec2, 5)) {
+			element->baseAlignment = 8; // All 2-Vectors have a base alignment of 8 bytes 
+		} else if (isValueInArray(element->type, vec34, 10)) {
+			element->baseAlignment = 16; // All 3-Vectors and 4-Vectors have a base alignment of 16 bytes 
+		}
+	} else { // Element is an array or matrix element/column
+		element->baseAlignment = 16; // All array or matrix elements/columns have a base alignment of 16 bytes
+	}
+	return 0;
+} 
 
 bool isValueInArray(char *value, char *array[], int size) {
 	for (int i = 0; i < size; i++) {
@@ -99,6 +124,8 @@ int parseInputFile(char *file) {
 		printf("Failed to open file\n");
 		return -1; // Fail
 	} 
+	struct UniformBlockElement elements[50]; // Element Array (Add Dynamic Allocation Later!)
+	int elementIndex = 0;
 	while (fgets(temp, 512, input) != NULL) { // Loop Through Lines
 		// Check for 'layout' keyword
 		char *tokenized[10] = {NULL}; // Array of Tokens
@@ -113,16 +140,52 @@ int parseInputFile(char *file) {
 				blockLine = line; // Set the line of the block 
 			}
 		if (inBlock && tokenized[0] != NULL) {
-			if (isValueAType(tokenized[0])) { // Check if the token declares a type 
-				struct UniformBlockElement element = {tokenized[0], tokenized[1], 0, 0, 0, 0}; // Store Element in a Struct
-				if (tokenized[2] != NULL) { 
-					element.isArray = true;
-					element.arrayLength = atoi(tokenized[2]);
-				}
-				if (element.isArray == false)
-					printf("Type: %s, Name: %s\n", element.type, element.name);
-				else
-					printf("Type: %s, Name: %s, Length: %d\n", element.type, element.name, element.arrayLength);
+			if (isValueAType(tokenized[0])) { // Check if the token declares a type
+				if (strncmp(tokenized[0], "mat", 3) == 0) {
+					int columns = tokenized[0][3] - '0';
+					int rows;
+					if (strlen(tokenized[0]) == 4)
+						rows = columns;
+					else
+						rows = tokenized[0][5] - '0';
+					char *strRows;
+					sprintf(strRows, "%d", rows);
+					for (int i = 0; i < columns; i++) {
+						char *index = malloc(sizeof(char));
+						sprintf(index, "%d", i);
+						struct UniformBlockElement element = {malloc(sizeof(tokenized[0]) + 7 /* (vecx)*/), malloc(sizeof(tokenized[1]) + 2 + strlen(index) /*[i]*/), 1, 0, 0}; // Store Element in a Struct
+						memcpy(element.type, tokenized[0], sizeof(tokenized[0]) + 7); // Copy Type
+						strcat(element.type, " (vec"); //
+						strcat(element.type, strRows); // Add Number of Rows
+						strcat(element.type, ")"); //
+						memcpy(element.name, tokenized[1], sizeof(tokenized[1]) + 2 + strlen(index)); // Copy Name
+						strcat(element.name, "["); //
+						strcat(element.name, index); // Add Array Index
+						strcat(element.name, "]"); //
+						elements[elementIndex] = element; // Add to array
+						elementIndex++;
+					}
+				} else if (tokenized[2] == NULL) {
+					struct UniformBlockElement element = {malloc(sizeof(tokenized[0])), malloc(sizeof(tokenized[1])), 0, 0, 0}; // Store Element in a Struct
+					memcpy(element.type, tokenized[0], sizeof(tokenized[0])); // Copy Type
+					memcpy(element.name, tokenized[1], sizeof(tokenized[1])); // Copy Name 
+					elements[elementIndex] = element; // Add to Array
+					elementIndex++;
+				} else {
+					int length = atoi(tokenized[2]);
+					for (int i = 0; i < length; i++) {
+						char *index = malloc(16 * sizeof(char));
+						sprintf(index, "%d", i);
+						struct UniformBlockElement element = {malloc(sizeof(tokenized[0])), malloc(sizeof(tokenized[1]) + 2 + strlen(index) /*[i]*/), 1, 0, 0}; // Store Element in a Struct
+						memcpy(element.type, tokenized[0], sizeof(tokenized[0])); // Copy Type
+						memcpy(element.name, tokenized[1], sizeof(tokenized[1]) + 2 + strlen(index)); // Copy Name
+						strcat(element.name, "["); //
+						strcat(element.name, index); // Add Array Index
+						strcat(element.name, "]"); //
+						elements[elementIndex] = element; // Add to array
+						elementIndex++;
+					}
+				} 
 			}
 		}
 		if (tokenized[0] != NULL)
@@ -133,7 +196,12 @@ int parseInputFile(char *file) {
 				break;
 			}
 		line++; // Increment Line
-	} 
+	}
+	for (int i = 0; i < elementIndex; i++) {
+		setBaseAlignment(&elements[i]);
+		struct UniformBlockElement element = elements[i];
+		printf("Type: %s, Name: %s, BA: %d\n", element.type, element.name, element.baseAlignment);
+	}
 	if (input)
 		fclose(input); // Close the file 
 	return 0;
